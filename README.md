@@ -3,116 +3,131 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JunkBloque - Ganhe Pontos</title>
+    <title>Junflix - IPTV Premium</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
     <style>
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            text-align: center; 
-            background: #1a1a2e; 
-            color: #e94560; 
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
+        :root { --red: #E50914; --black: #141414; --gray: #2f2f2f; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Arial', sans-serif; background: var(--black); color: #fff; overflow-x: hidden; }
+
+        header {
+            padding: 15px 4%;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, transparent 100%);
+            display: flex; justify-content: space-between; align-items: center;
+            position: fixed; top: 0; width: 100%; z-index: 1000;
         }
-        #game-container { 
-            background: #16213e;
-            border: 3px solid #0f3460; 
-            padding: 30px; 
-            border-radius: 20px; 
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
-            width: 300px;
+        .logo { color: var(--red); font-size: 28px; font-weight: bold; }
+
+        .top-nav { display: flex; gap: 10px; }
+        input#url { background: #333; border: 1px solid #444; color: #fff; padding: 8px; border-radius: 4px; width: 150px; font-size: 12px; }
+        
+        .hero { width: 100%; height: 45vh; background: #000; display: flex; align-items: center; justify-content: center; margin-top: 60px; }
+        video { width: 100%; height: 100%; background: #000; }
+
+        .content { padding: 20px 4%; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 15px; }
+
+        .card {
+            background: var(--gray); border-radius: 4px; overflow: hidden;
+            cursor: pointer; transition: transform 0.3s; position: relative;
+            aspect-ratio: 16/9; border: 1px solid #333;
         }
-        h1 { color: #4ecca3; margin-bottom: 10px; }
-        .score-box { font-size: 32px; font-weight: bold; margin: 20px 0; color: #fff; }
-        .btn { 
-            background: #4ecca3; 
-            border: none; 
-            padding: 15px; 
-            width: 100%;
-            font-size: 18px; 
-            cursor: pointer; 
-            border-radius: 10px; 
-            color: #1a1a2e; 
-            font-weight: bold;
-            transition: 0.3s;
-            margin-bottom: 10px;
+        .card:hover { transform: scale(1.05); }
+        .card img { width: 100%; height: 100%; object-fit: contain; background: #222; }
+        .card .title {
+            position: absolute; bottom: 0; width: 100%; background: rgba(0,0,0,0.8);
+            padding: 5px; font-size: 10px; text-align: center; white-space: nowrap; overflow: hidden;
         }
-        .btn:hover { background: #45b293; transform: scale(1.05); }
-        .btn:disabled { background: #394a51; cursor: not-allowed; transform: none; color: #777; }
-        .ad-btn { background: #e94560; color: white; }
-        .ad-btn:hover { background: #cf3a54; }
-        #status-msg { font-size: 14px; color: #888; }
     </style>
 </head>
 <body>
 
-    <div id="game-container">
-        <h1>JunkBloque</h1>
-        <div class="score-box">JB: <span id="points">0</span></div>
-        
-        <button id="clickBtn" class="btn" onclick="playGame()">JOGAR JUNKBLOQUE</button>
-        
-        <button id="adBtn" class="btn ad-btn" onclick="showAd()" style="display: none;">
-            VER ANÚNCIO (+50 JB)
-        </button>
-
-        <p id="status-msg">Clique no botão para minerar pontos!</p>
-        <button onclick="resetGame()" style="background:none; border:none; color:#555; cursor:pointer; font-size:10px; margin-top:20px;">Resetar progresso</button>
+<header>
+    <div class="logo">JUNFLIX</div>
+    <div class="top-nav">
+        <input type="text" id="url" placeholder="Link da Lista .m3u" value="https://raw.githubusercontent.com/iptv-org/iptv/master/streams/br.m3u">
+        <button onclick="loadList()" style="background:var(--red); color:#fff; border:none; padding:8px 15px; cursor:pointer; border-radius:4px; font-weight:bold;">OK</button>
     </div>
+</header>
 
-    <script>
-        // Carrega os pontos salvos ou começa do zero
-        let score = parseInt(localStorage.getItem('junkbloque_pts')) || 0;
-        let playCount = 0;
+<div class="hero">
+    <video id="player" controls autoplay playsinline></video>
+</div>
 
-        // Atualiza a tela ao carregar
-        document.getElementById('points').innerText = score;
+<div class="content">
+    <h2 id="cat-name" style="margin-bottom:15px; font-size: 18px;">Canais Disponíveis</h2>
+    <div id="grid" class="grid">Carregando canais...</div>
+</div>
 
-        function updateDisplay() {
-            document.getElementById('points').innerText = score;
-            localStorage.setItem('junkbloque_pts', score);
+<script>
+    const video = document.getElementById('player');
+    const hls = new Hls();
+    // Usando um proxy para evitar erro de CORS
+    const proxy = "https://api.allorigins.win/raw?url=";
+
+    async function loadList() {
+        const grid = document.getElementById('grid');
+        grid.innerHTML = "Carregando...";
+        const url = document.getElementById('url').value;
+        
+        try {
+            const res = await fetch(proxy + encodeURIComponent(url));
+            const data = await res.text();
+            parse(data);
+        } catch (e) {
+            grid.innerHTML = "Erro ao carregar lista. Verifique o link ou tente novamente.";
         }
+    }
 
-        function playGame() {
-            score += 1;
-            playCount++;
-            updateDisplay();
-
-            if (playCount >= 10) {
-                document.getElementById('clickBtn').style.display = 'none';
-                document.getElementById('adBtn').style.display = 'block';
-                document.getElementById('status-msg').innerText = "Energia esgotada! Veja um anúncio.";
-            }
-        }
-
-        function showAd() {
-            document.getElementById('status-msg').innerText = "Carregando anúncio...";
-            document.getElementById('adBtn').disabled = true;
-
-            // Simula o tempo do anúncio (3 segundos)
-            setTimeout(() => {
-                score += 50;
-                playCount = 0;
-                updateDisplay();
+    function parse(text) {
+        const channels = [];
+        const lines = text.split('\n');
+        
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i].includes('#EXTINF')) {
+                const name = lines[i].split(',')[1] || "Canal Sem Nome";
+                const logoMatch = lines[i].match(/tvg-logo="([^"]+)"/);
+                const logo = logoMatch ? logoMatch[1] : '';
+                const stream = lines[i+1]?.trim();
                 
-                document.getElementById('clickBtn').style.display = 'block';
-                document.getElementById('adBtn').style.display = 'none';
-                document.getElementById('adBtn').disabled = false;
-                document.getElementById('status-msg').innerText = "Pontos creditados! Continue jogando.";
-                alert("Anúncio finalizado! Você ganhou 50 pontos JunkBloque.");
-            }, 3000);
-        }
-
-        function resetGame() {
-            if(confirm("Deseja zerar seus pontos?")) {
-                score = 0;
-                playCount = 0;
-                updateDisplay();
-                location.reload();
+                if (stream && stream.startsWith('http')) {
+                    channels.push({ name, logo, stream });
+                }
             }
         }
-    </script>
+        render(channels);
+    }
+
+    function render(channels) {
+        const grid = document.getElementById('grid');
+        if (channels.length === 0) {
+            grid.innerHTML = "Nenhum canal encontrado nesta lista.";
+            return;
+        }
+
+        grid.innerHTML = channels.map(c => `
+            <div class="card" onclick="play('${c.stream}')">
+                <img src="${c.logo}" onerror="this.src='https://via.placeholder.com/300x168?text=TV'">
+                <div class="title">${c.name}</div>
+            </div>
+        `).join('');
+    }
+
+    function play(url) {
+        if (Hls.isSupported()) {
+            hls.loadSource(url);
+            hls.attachMedia(video);
+            hls.play();
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.src = url;
+            video.play();
+        }
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    window.onload = loadList;
+</script>
 </body>
 </html>
